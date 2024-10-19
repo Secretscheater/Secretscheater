@@ -1,0 +1,106 @@
+-- Place this LocalScript in StarterPlayerScripts or StarterCharacterScripts
+
+-- Variables
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Highlight = nil
+local closestPlayer = nil
+local originalWalkSpeed = 16 -- Default WalkSpeed for players
+local lagging = false
+
+-- Function to get the closest player
+local function getClosestPlayer()
+    local shortestDistance = math.huge
+    closestPlayer = nil
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        -- Skip the local player
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+            
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestPlayer = player
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Function to check if the player has anti-lag enabled
+local function hasAntiLag(player)
+    -- Check for a custom attribute, "CanLag" (false means the player has anti-lag enabled)
+    if player and player.Character and player.Character:FindFirstChild("CanLag") then
+        return player.Character.CanLag.Value == false
+    end
+    return false
+end
+
+-- Function to simulate lag for the closest player
+local function simulateLag(player)
+    if player and player.Character and player.Character:FindFirstChild("Humanoid") and not hasAntiLag(player) then
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        if not lagging then
+            originalWalkSpeed = humanoid.WalkSpeed -- Save original WalkSpeed
+            humanoid.WalkSpeed = 5 -- Slow them down to simulate lag
+            lagging = true
+        end
+    end
+end
+
+-- Function to restore original WalkSpeed and stop lag
+local function restorePlayerState(player)
+    if player and player.Character and player.Character:FindFirstChild("Humanoid") then
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        if lagging then
+            humanoid.WalkSpeed = originalWalkSpeed -- Restore original WalkSpeed
+            lagging = false
+        end
+    end
+end
+
+-- Function to update the highlight and lag effect
+local function updateHighlightAndLag()
+    local closest = getClosestPlayer()
+    
+    -- Highlight logic
+    if closest and closest.Character then
+        if not Highlight then
+            -- Create a Highlight object
+            Highlight = Instance.new("Highlight")
+            Highlight.FillColor = Color3.fromRGB(255, 0, 0) -- Red color
+            Highlight.OutlineColor = Color3.fromRGB(255, 0, 0) -- Red outline
+            Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Show through walls
+            Highlight.Parent = closest.Character
+        elseif Highlight.Parent ~= closest.Character then
+            -- Update the parent of the highlight if the closest player has changed
+            Highlight.Parent = closest.Character
+        end
+        
+        -- Simulate lag for the closest player if they don't have anti-lag
+        simulateLag(closest)
+    else
+        -- Remove highlight and restore player state if no valid player is found
+        if Highlight then
+            restorePlayerState(Highlight.Parent.Parent)
+            Highlight:Destroy()
+            Highlight = nil
+        end
+    end
+end
+
+-- Function to setup player character and handle respawn
+local function onCharacterAdded(character)
+    -- Update the highlight and lag effect every frame
+    RunService.RenderStepped:Connect(updateHighlightAndLag)
+end
+
+-- Listen for local player's character respawn
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+-- Initialize for the first character
+if LocalPlayer.Character then
+    onCharacterAdded(LocalPlayer.Character)
+end
