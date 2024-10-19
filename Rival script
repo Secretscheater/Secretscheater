@@ -1,0 +1,117 @@
+local player = game.Players.LocalPlayer
+local camera = game.Workspace.CurrentCamera
+local TweenService = game:GetService("TweenService")
+local updateInterval = 0.1 -- Update every 0.1 seconds to reduce lag
+local lastNearestPlayer = nil -- Track the last highlighted player
+
+-- Create a red highlight function
+local function createHighlight(target)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        -- Check if the highlight already exists
+        if not target.Character:FindFirstChild("Highlight") then
+            -- Create a BillboardGui to act as the highlight
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "Highlight"
+            billboard.Size = UDim2.new(2, 0, 2, 0) -- Adjust size as needed
+            billboard.Adornee = target.Character.HumanoidRootPart
+            billboard.AlwaysOnTop = true
+
+            -- Add a red frame to the BillboardGui
+            local frame = Instance.new("Frame")
+            frame.Size = UDim2.new(1, 0, 1, 0)
+            frame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            frame.BackgroundTransparency = 0.5
+            frame.BorderSizePixel = 0
+            frame.Parent = billboard
+
+            billboard.Parent = target.Character.HumanoidRootPart
+        end
+    end
+end
+
+-- Function to remove all highlights and reset nearest player "lag"
+local function removeHighlights()
+    if lastNearestPlayer and lastNearestPlayer.Character and lastNearestPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local highlight = lastNearestPlayer.Character.HumanoidRootPart:FindFirstChild("Highlight")
+        if highlight then
+            highlight:Destroy()
+        end
+
+        -- Reset the player's walk speed and jump power (remove "lag" effect)
+        if lastNearestPlayer.Character:FindFirstChild("Humanoid") then
+            lastNearestPlayer.Character.Humanoid.WalkSpeed = 16 -- Default WalkSpeed
+            lastNearestPlayer.Character.Humanoid.JumpPower = 50 -- Default JumpPower
+        end
+    end
+end
+
+-- Function to "lag" the nearest player by reducing their WalkSpeed and JumpPower
+local function lagNearestPlayer(target)
+    if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+        -- Reduce WalkSpeed and JumpPower to simulate lag
+        target.Character.Humanoid.WalkSpeed = 5 -- Slow down movement
+        target.Character.Humanoid.JumpPower = 10 -- Reduce jump ability
+    end
+end
+
+-- Function to find the nearest player within a specific distance
+local function getNearestPlayer(maxDistance)
+    local closestPlayer = nil
+    local shortestDistance = maxDistance
+    for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (otherPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).magnitude
+            if distance < shortestDistance then
+                closestPlayer = otherPlayer
+                shortestDistance = distance
+            end
+        end
+    end
+    return closestPlayer
+end
+
+-- Function to smoothly aim at the nearest player
+local function smoothAim(target)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local targetPosition = target.Character.HumanoidRootPart.Position
+        local newCFrame = CFrame.new(camera.CFrame.Position, targetPosition)
+
+        -- Create a smooth transition (tween) for the camera
+        local tween = TweenService:Create(camera, TweenInfo.new(0.3), {CFrame = newCFrame})
+        tween:Play()
+    end
+end
+
+-- Main function to handle aiming, highlighting, and lagging the nearest player
+local function runAimAssist()
+    game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+        -- Update every 0.1 seconds to reduce lag
+        if deltaTime >= updateInterval then
+            local nearestPlayer = getNearestPlayer(50) -- Adjust range as needed
+            if nearestPlayer ~= lastNearestPlayer then
+                removeHighlights() -- Clear previous highlights and reset "lag"
+                if nearestPlayer then
+                    smoothAim(nearestPlayer)
+                    createHighlight(nearestPlayer) -- Highlight the nearest player
+                    lagNearestPlayer(nearestPlayer) -- Apply "lag" effect to the nearest player
+                end
+                lastNearestPlayer = nearestPlayer -- Update last highlighted player
+            end
+        end
+    end)
+end
+
+-- Run aim assist and reset after respawn
+local function onPlayerRespawn()
+    player.CharacterAdded:Connect(function(character)
+        -- Wait for the character to fully load
+        character:WaitForChild("HumanoidRootPart")
+        runAimAssist() -- Restart aim assist after respawn
+    end)
+end
+
+-- Start the aim assist
+runAimAssist()
+
+-- Connect the respawn event
+onPlayerRespawn()
